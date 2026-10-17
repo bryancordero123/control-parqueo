@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Control de Parqueo</title>
+  <style>
+    :root {
+      --primary: #1976d2;
+      --success: #2e7d32;
+      --camioneta: #6a1b9a;
+      --moto: #e65100;
+      --bg: #f4f6f8;
+      --surface: #ffffff;
+      --text: #212121;
+      --text-sec: #666;
+      --border: #e0e0e0;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; }
+    h1 { font-size: 1.3rem; text-align: center; margin-top: 0; margin-bottom: 16px; color: var(--primary); }
+    
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn {
+      flex: 1; padding: 10px; background: #e3e8ee; border: none;
+      border-radius: 8px; font-weight: 600; color: #555; cursor: pointer;
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; }
+
+    .card { background: var(--surface); padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); margin-bottom: 16px; }
+    
+    .type-selector {
+      display: flex; gap: 6px; margin-bottom: 10px;
+    }
+    .type-btn {
+      flex: 1; padding: 8px 4px; border: 2px solid var(--border);
+      background: white; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem;
+    }
+    .type-btn.selected-auto { border-color: var(--primary); background: #e3f2fd; color: var(--primary); }
+    .type-btn.selected-camioneta { border-color: var(--camioneta); background: #f3e5f5; color: var(--camioneta); }
+    .type-btn.selected-moto { border-color: var(--moto); background: #fff3e0; color: var(--moto); }
+
+    .input-group { display: flex; gap: 8px; }
+    input[type="text"], input[type="date"] {
+      flex: 1; padding: 12px; font-size: 1rem; border: 1px solid var(--border);
+      border-radius: 8px; outline: none;
+    }
+    input[type="text"] { text-transform: uppercase; }
+    
+    button {
+      padding: 12px 18px; font-size: 1rem; font-weight: 600;
+      border: none; border-radius: 8px; cursor: pointer;
+    }
+    .btn-main { background: var(--primary); color: white; }
+    .btn-checkout { background: var(--success); color: white; padding: 8px 12px; font-size: 0.9rem; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-sec); padding: 6px 12px; font-size: 0.85rem; }
+    
+    .list-header { font-size: 1rem; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .badge {
+      display: inline-block; padding: 2px 6px; font-size: 0.72rem;
+      font-weight: 700; border-radius: 4px; margin-left: 6px; text-transform: uppercase;
+    }
+    .badge-auto { background: #e3f2fd; color: var(--primary); }
+    .badge-camioneta { background: #f3e5f5; color: var(--camioneta); }
+    .badge-moto { background: #fff3e0; color: var(--moto); }
+
+    .vehicle-item, .history-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 8px;
+    }
+    .plate { font-weight: 700; font-size: 1.1rem; }
+    .meta-time { font-size: 0.82rem; color: var(--text-sec); margin-top: 2px; }
+    
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .stat-card {
+      background: var(--surface); padding: 10px; border-radius: 10px;
+      border: 1px solid var(--border); text-align: center;
+    }
+    .stat-value { font-size: 1.3rem; font-weight: 800; color: var(--success); margin-top: 4px; }
+    .stat-label { font-size: 0.72rem; color: var(--text-sec); font-weight: 700; text-transform: uppercase; }
+
+    .modal-backdrop {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px;
+    }
+    .modal { background: white; border-radius: 12px; padding: 20px; width: 100%; max-width: 320px; text-align: center; }
+    .price-display { font-size: 2.2rem; font-weight: 800; color: var(--success); margin: 12px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>Control de Parqueo</h1>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" id="tabVehiclesBtn" onclick="switchTab('vehicles')">🚗 En Patio</button>
+    <button class="tab-btn" id="tabReportBtn" onclick="switchTab('report')">📊 Reporte de Caja</button>
+  </div>
+
+  <!-- Vista: Vehículos Activos -->
+  <div id="viewVehicles">
+    <div class="card">
+      <div class="type-selector">
+        <button type="button" id="btnTypeAuto" class="type-btn selected-auto" onclick="selectType('auto')">🚗 Auto</button>
+        <button type="button" id="btnTypeCamioneta" class="type-btn" onclick="selectType('camioneta')">🛻 Camioneta</button>
+        <button type="button" id="btnTypeMoto" class="type-btn" onclick="selectType('moto')">🏍️ Moto</button>
+      </div>
+      <div class="input-group">
+        <input type="text" id="plateInput" placeholder="Placa (ej. ABC-1234)" autocomplete="off">
+        <button class="btn-main" onclick="checkIn()">Ingresar</button>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text-sec); margin:8px 0 0 2px; text-align:center;">
+        15 min gratis | $2/hora o fracción | Día completo: $5
+      </p>
+    </div>
+
+    <div class="list-header">
+      <span>Vehículos en Patio</span>
+      <span id="activeCount" style="background:#e3e8ee; padding:2px 8px; border-radius:12px; font-size:0.85rem;">0</span>
+    </div>
+    <div id="vehicleList"></div>
+  </div>
+
+  <!-- Vista: Reporte de Caja -->
+  <div id="viewReport" style="display:none;">
+    <div class="card" style="padding:12px;">
+      <label style="font-size:0.85rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:6px;">Fecha del Reporte:</label>
+      <input type="date" id="reportDate" onchange="renderReport()">
+    </div>
+
+    <div class="summary-grid">
+      <div class="stat-card" style="grid-column: span 2;">
+        <div class="stat-label">Total Recaudado en Caja</div>
+        <div class="stat-value" id="sumTotalIncome" style="font-size:1.6rem;">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Salidas</div>
+        <div class="stat-value" id="sumTotalExits" style="color:var(--primary);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Salidas Gracia (0-15m)</div>
+        <div class="stat-value" id="sumGraceCount" style="color:var(--text-sec);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Autos ($2/h | $5 día)</div>
+        <div class="stat-value" id="sumAutoCount" style="color:var(--primary); font-size:1rem;">0 ($0)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Camionetas ($2/h | $5 día)</div>
+        <div class="stat-value" id="sumCamionetaCount" style="color:var(--camioneta); font-size:1rem;">0 ($0)</div>
+      </div>
+      <div class="stat-card" style="grid-column: span 2;">
+        <div class="stat-label">Motos ($2/h | $5 día)</div>
+        <div class="stat-value" id="sumMotoCount" style="color:var(--moto); font-size:1rem;">0 ($0)</div>
+      </div>
+    </div>
+
+    <div class="list-header">
+      <span>Desglose de Salidas</span>
+      <button class="btn-outline" onclick="exportReportCSV()">📥 Exportar CSV</button>
+    </div>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- Modal de Cobro -->
+  <div id="checkoutModal" class="modal-backdrop">
+    <div class="modal">
+      <h3 style="margin-top:0">Liquidación de Salida</h3>
+      <div id="modalPlate" style="font-weight:700; font-size:1.2rem;"></div>
+      <div id="modalDuration" style="color:var(--text-sec); margin-top:4px;"></div>
+      <div class="price-display" id="modalTotal">$0</div>
+      <p id="modalTariffNote" style="font-size:0.8rem; color:var(--text-sec); margin-bottom:16px;"></p>
+      <button class="btn-main" style="width:100%" onclick="finalizeCheckout()">Confirmar Cobro y Salida</button>
+      <button class="btn-outline" style="width:100%; margin-top:8px;" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <script>
+    const HOURLY_RATE = 2;       // $2 por hora o fracción
+    const DAILY_MAX_RATE = 5;    // $5 tope por día completo (24h)
+    const GRACE_PERIOD_MIN = 15; // 15 minutos gratis
+
+    let selectedVehicleType = 'auto';
+    let vehicles = JSON.parse(localStorage.getItem('parking_db')) || [];
+    let historyRecords = JSON.parse(localStorage.getItem('parking_history')) || [];
+    let currentCheckoutIndex = null;
+
+    document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
+
+    function selectType(type) {
+      selectedVehicleType = type;
+      document.getElementById('btnTypeAuto').className = 'type-btn ' + (type === 'auto' ? 'selected-auto' : '');
+      document.getElementById('btnTypeCamioneta').className = 'type-btn ' + (type === 'camioneta' ? 'selected-camioneta' : '');
+      document.getElementById('btnTypeMoto').className = 'type-btn ' + (type === 'moto' ? 'selected-moto' : '');
+    }
+
+    function switchTab(tab) {
+      const isVehicles = tab === 'vehicles';
+      document.getElementById('viewVehicles').style.display = isVehicles ? 'block' : 'none';
+      document.getElementById('viewReport').style.display = isVehicles ? 'none' : 'block';
+      document.getElementById('tabVehiclesBtn').classList.toggle('active', isVehicles);
+      document.getElementById('tabReportBtn').classList.toggle('active', !isVehicles);
+      if (!isVehicles) renderReport();
+    }
+
+    function saveState() {
+      localStorage.setItem('parking_db', JSON.stringify(vehicles));
+      localStorage.setItem('parking_history', JSON.stringify(historyRecords));
+      renderActive();
+      renderReport();
+    }
+
+    function checkIn() {
+      const input = document.getElementById('plateInput');
+      const plate = input.value.trim().toUpperCase();
+      if (!plate) return;
+
+      if (vehicles.some(v => v.plate === plate)) {
+        alert('Este vehículo ya se encuentra registrado en el patio.');
+        return;
+      }
+
+      vehicles.unshift({
+        plate: plate,
+        type: selectedVehicleType,
+        entryTime: new Date().toISOString()
+      });
+
+      input.value = '';
+      saveState();
+    }
+
+    function calculateBilling(v) {
+      const entry = new Date(v.entryTime);
+      const now = new Date();
+      const diffMs = now - entry;
+      const totalMinutes = Math.max(1, Math.ceil(diffMs / 60000));
+      const type = v.type || 'auto';
+
+      let totalCost = 0;
+      let ruleApplied = '';
+
+      // Regla 1: Tiempo de gracia
+      if (totalMinutes <= GRACE_PERIOD_MIN) {
+        totalCost = 0;
+        ruleApplied = `Tiempo de gracia (menos de ${GRACE_PERIOD_MIN} min)`;
+      } else {
+        // Regla 2: Facturación con tope de $5 por bloque de 24h
+        const days = Math.floor(totalMinutes / (24 * 60));
+        const remMinutes = totalMinutes % (24 * 60);
+
+        let remHours = Math.ceil(remMinutes / 60);
+        let remCost = remHours * HOURLY_RATE;
+
+        // Si las horas restantes superan el tope del día, se topa en $5
+        if (remCost > DAILY_MAX_RATE) {
+          remCost = DAILY_MAX_RATE;
+        }
+
+        totalCost = (days * DAILY_MAX_RATE) + remCost;
+
+        if (days > 0) {
+          ruleApplied = `${days} día(s) ($${days * DAILY_MAX_RATE}) + fracción ($${remCost})`;
+        } else if (remCost === DAILY_MAX_RATE && remHours * HOURLY_RATE > DAILY_MAX_RATE) {
+          ruleApplied = `Tope de día completo aplicado ($${DAILY_MAX_RATE})`;
+        } else {
+          ruleApplied = `${remHours} hora(s) facturada(s) a $${HOURLY_RATE}/h`;
+        }
+      }
+
+      const hrs = Math.floor(totalMinutes / 60);
+      const mins = totalMinutes % 60;
+      const durationText = `${hrs}h ${mins}m transcurridos`;
+
+      return { totalMinutes, totalCost, type, ruleApplied, durationText, exitTime: now.toISOString() };
+    }
+
+    function startCheckout(index) {
+      currentCheckoutIndex = index;
+      const v = vehicles[index];
+      const bill = calculateBilling(v);
+
+      const typeNames = { auto: 'Auto', camioneta: 'Camioneta', moto: 'Moto' };
+      document.getElementById('modalPlate').innerText = `${v.plate} (${typeNames[bill.type]})`;
+      document.getElementById('modalDuration').innerText = bill.durationText;
+      document.getElementById('modalTotal').innerText = `$${bill.totalCost}`;
+      document.getElementById('modalTariffNote').innerText = bill.ruleApplied;
+      document.getElementById('checkoutModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      currentCheckoutIndex = null;
+      document.getElementById('checkoutModal').style.display = 'none';
+    }
+
+    function finalizeCheckout() {
+      if (currentCheckoutIndex === null) return;
+
+      const v = vehicles[currentCheckoutIndex];
+      const bill = calculateBilling(v);
+
+      historyRecords.unshift({
+        plate: v.plate,
+        type: bill.type,
+        entryTime: v.entryTime,
+        exitTime: bill.exitTime,
+        totalMinutes: bill.totalMinutes,
+        ruleApplied: bill.ruleApplied,
+        totalCost: bill.totalCost
+      });
+
+      vehicles.splice(currentCheckoutIndex, 1);
+      closeModal();
+      saveState();
+    }
+
+    function renderActive() {
+      const container = document.getElementById('vehicleList');
+      const countLabel = document.getElementById('activeCount');
+      container.innerHTML = '';
+      countLabel.innerText = vehicles.length;
+
+      if (vehicles.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:#999; padding:24px;">No hay vehículos registrados</div>';
+        return;
+      }
+
+      vehicles.forEach((v, idx) => {
+        const timeStr = new Date(v.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const type = v.type || 'auto';
+        const badgeClass = `badge-${type}`;
+
+        const div = document.createElement('div');
+        div.className = 'vehicle-item';
+        div.innerHTML = `
+          <div>
+            <div>
+              <span class="plate">${v.plate}</span>
+              <span class="badge ${badgeClass}">${type}</span>
+            </div>
+            <div class="meta-time">Entrada: ${timeStr}</div>
+          </div>
+          <button class="btn-checkout" onclick="startCheckout(${idx})">Cobrar</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderReport() {
+      const selectedDate = document.getElementById('reportDate').value;
+      const container = document.getElementById('historyList');
+      container.innerHTML = '';
+
+      const dailyRecords = historyRecords.filter(r => {
+        const exitDate = new Date(r.exitTime).toLocaleDateString('en-CA');
+        return exitDate === selectedDate;
+      });
+
+      let totalIncome = 0;
+      let graceCount = 0;
+      let autoCount = 0, autoIncome = 0;
+      let camionetaCount = 0, camionetaIncome = 0;
+      let motoCount = 0, motoIncome = 0;
+
+      dailyRecords.forEach(r => {
+        totalIncome += r.totalCost;
+        if (r.totalCost === 0) graceCount++;
+
+        const type = r.type || 'auto';
+        if (type === 'auto') {
+          autoCount++; autoIncome += r.totalCost;
+        } else if (type === 'camioneta') {
+          camionetaCount++; camionetaIncome += r.totalCost;
+        } else if (type === 'moto') {
+          motoCount++; motoIncome += r.totalCost;
+        }
+      });
+
+      document.getElementById('sumTotalIncome').innerText = `$${totalIncome}`;
+      document.getElementById('sumTotalExits').innerText = dailyRecords.length;
+      document.getElementById('sumGraceCount').innerText = graceCount;
+      document.getElementById('sumAutoCount').innerText = `${autoCount} ($${autoIncome})`;
+      document.getElementById('sumCamionetaCount').innerText = `${camionetaCount} ($${camionetaIncome})`;
+      document.getElementById('sumMotoCount').innerText = `${motoCount} ($${motoIncome})`;
+
+      if (dailyRecords.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:#999; padding:24px;">No hay cobros registrados en esta fecha</div>';
+        return;
+      }
+
+      dailyRecords.forEach(r => {
+        const inTime = new Date(r.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const outTime = new Date(r.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const type = r.type || 'auto';
+        const badgeClass = `badge-${type}`;
+
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `
+          <div>
+            <div>
+              <span class="plate">${r.plate}</span>
+              <span class="badge ${badgeClass}">${type}</span>
+            </div>
+            <div class="meta-time">In: ${inTime} | Out: ${outTime} — ${r.ruleApplied}</div>
+          </div>
+          <div style="font-weight:700; font-size:1.1rem; color:var(--success);">$${r.totalCost}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function exportReportCSV() {
+      const selectedDate = document.getElementById('reportDate').value;
+      const dailyRecords = historyRecords.filter(r => {
+        return new Date(r.exitTime).toLocaleDateString('en-CA') === selectedDate;
+      });
+
+      if (dailyRecords.length === 0) {
+        alert('No hay registros para exportar en esta fecha.');
+        return;
+      }
+
+      let csv = 'Placa,Tipo,Hora Entrada,Hora Salida,Detalle Cobro,Total Cobrado ($)\n';
+      dailyRecords.forEach(r => {
+        const inTime = new Date(r.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const outTime = new Date(r.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const type = (r.type || 'auto').toUpperCase();
+        csv += `"${r.plate}","${type}","${inTime}","${outTime}","${r.ruleApplied}",${r.totalCost}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cierre_caja_${selectedDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    renderActive();
+    renderReport();
+  </script>
+</body>
+</html>
