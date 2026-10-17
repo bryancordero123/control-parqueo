@@ -15,6 +15,8 @@
       --text: #212121;
       --text-sec: #666;
       --border: #e0e0e0;
+      --danger: #d32f2f;
+      --danger-bg: #ffebee;
     }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; }
@@ -29,9 +31,7 @@
 
     .card { background: var(--surface); padding: 16px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); margin-bottom: 16px; }
     
-    .type-selector {
-      display: flex; gap: 6px; margin-bottom: 10px;
-    }
+    .type-selector { display: flex; gap: 6px; margin-bottom: 10px; }
     .type-btn {
       flex: 1; padding: 8px 4px; border: 2px solid var(--border);
       background: white; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.85rem;
@@ -45,7 +45,7 @@
       flex: 1; padding: 12px; font-size: 1rem; border: 1px solid var(--border);
       border-radius: 8px; outline: none;
     }
-    input[type="text"] { text-transform: uppercase; }
+    input[type="text"] { text-transform: uppercase; font-weight: 600; letter-spacing: 1px; }
     
     button {
       padding: 12px 18px; font-size: 1rem; font-weight: 600;
@@ -54,6 +54,7 @@
     .btn-main { background: var(--primary); color: white; }
     .btn-checkout { background: var(--success); color: white; padding: 8px 12px; font-size: 0.9rem; }
     .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-sec); padding: 6px 12px; font-size: 0.85rem; }
+    .btn-delete { background: var(--danger-bg); color: var(--danger); border: 1px solid #ffcdd2; padding: 8px 10px; font-size: 0.8rem; border-radius: 8px; font-weight: 600; }
     
     .list-header { font-size: 1rem; font-weight: 600; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
     
@@ -81,6 +82,11 @@
     .stat-value { font-size: 1.3rem; font-weight: 800; color: var(--success); margin-top: 4px; }
     .stat-label { font-size: 0.72rem; color: var(--text-sec); font-weight: 700; text-transform: uppercase; }
 
+    .void-item {
+      background: #fff8f8; border: 1px dashed #ef9a9a; border-radius: 8px;
+      padding: 10px; margin-bottom: 8px; font-size: 0.85rem;
+    }
+
     .modal-backdrop {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; padding: 16px;
@@ -107,7 +113,13 @@
         <button type="button" id="btnTypeMoto" class="type-btn" onclick="selectType('moto')">🏍️ Moto</button>
       </div>
       <div class="input-group">
-        <input type="text" id="plateInput" placeholder="Placa (ej. ABC-1234)" autocomplete="off">
+        <input 
+          type="text" 
+          id="plateInput" 
+          placeholder="Placa (ej. ABC-1234)" 
+          maxlength="8" 
+          autocomplete="off" 
+          oninput="formatPlate(this)">
         <button class="btn-main" onclick="checkIn()">Ingresar</button>
       </div>
       <p style="font-size:0.75rem; color:var(--text-sec); margin:8px 0 0 2px; text-align:center;">
@@ -125,7 +137,10 @@
   <!-- Vista: Reporte de Caja -->
   <div id="viewReport" style="display:none;">
     <div class="card" style="padding:12px;">
-      <label style="font-size:0.85rem; font-weight:600; color:var(--text-sec); display:block; margin-bottom:6px;">Fecha del Reporte:</label>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <label style="font-size:0.85rem; font-weight:600; color:var(--text-sec);">Fecha del Reporte:</label>
+        <button class="btn-outline" style="padding:4px 8px; font-size:0.75rem;" onclick="changeAdminPassword()">🔑 Configurar Clave</button>
+      </div>
       <input type="date" id="reportDate" onchange="renderReport()">
     </div>
 
@@ -135,7 +150,7 @@
         <div class="stat-value" id="sumTotalIncome" style="font-size:1.6rem;">$0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Total Salidas</div>
+        <div class="stat-label">Total Salidas Cobradas</div>
         <div class="stat-value" id="sumTotalExits" style="color:var(--primary);">0</div>
       </div>
       <div class="stat-card">
@@ -157,10 +172,16 @@
     </div>
 
     <div class="list-header">
-      <span>Desglose de Salidas</span>
+      <span>Salidas Efectivas</span>
       <button class="btn-outline" onclick="exportReportCSV()">📥 Exportar CSV</button>
     </div>
     <div id="historyList"></div>
+
+    <div class="list-header" style="margin-top:20px; color:var(--danger);">
+      <span>Auditoría de Anulaciones</span>
+      <span id="voidCount" style="background:#ffebee; color:var(--danger); padding:2px 8px; border-radius:12px; font-size:0.85rem;">0</span>
+    </div>
+    <div id="voidList"></div>
   </div>
 
   <!-- Modal de Cobro -->
@@ -177,22 +198,74 @@
   </div>
 
   <script>
-    const HOURLY_RATE = 2;       // $2 por hora o fracción
-    const DAILY_MAX_RATE = 5;    // $5 tope por día completo (24h)
-    const GRACE_PERIOD_MIN = 15; // 15 minutos gratis
+    const HOURLY_RATE = 2;
+    const DAILY_MAX_RATE = 5;
+    const GRACE_PERIOD_MIN = 15;
 
     let selectedVehicleType = 'auto';
     let vehicles = JSON.parse(localStorage.getItem('parking_db')) || [];
     let historyRecords = JSON.parse(localStorage.getItem('parking_history')) || [];
+    let voidRecords = JSON.parse(localStorage.getItem('parking_voids')) || [];
     let currentCheckoutIndex = null;
 
+    function getAdminPassword() {
+      return localStorage.getItem('parking_admin_pass') || 'admin123';
+    }
+
+    function changeAdminPassword() {
+      const current = prompt('Ingresa la clave alfanumérica actual:');
+      if (current === null) return;
+
+      if (current !== getAdminPassword()) {
+        alert('Clave incorrecta. No se pudo cambiar.');
+        return;
+      }
+
+      const nueva = prompt('Ingresa la nueva clave alfanumérica:');
+      if (!nueva || nueva.trim() === '') {
+        alert('La clave no puede estar vacía.');
+        return;
+      }
+
+      localStorage.setItem('parking_admin_pass', nueva.trim());
+      alert('Clave actualizada correctamente.');
+    }
+
     document.getElementById('reportDate').value = new Date().toISOString().split('T')[0];
+
+    // Formateo automático de guion al escribir
+    function formatPlate(input) {
+      let raw = input.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const lettersCount = (selectedVehicleType === 'moto') ? 2 : 3;
+
+      if (raw.length > lettersCount) {
+        input.value = raw.slice(0, lettersCount) + '-' + raw.slice(lettersCount, lettersCount + 4);
+      } else {
+        input.value = raw;
+      }
+    }
+
+    // Validación del formato de placa
+    function isValidPlate(plate, type) {
+      if (type === 'moto') {
+        const motoRegex = /^([A-Z]{2}-[A-Z0-9]{3,4}|[A-Z]{3}-[0-9]{3,4})$/;
+        return motoRegex.test(plate);
+      } else {
+        const carRegex = /^[A-Z]{3}-[0-9]{3,4}$/;
+        return carRegex.test(plate);
+      }
+    }
 
     function selectType(type) {
       selectedVehicleType = type;
       document.getElementById('btnTypeAuto').className = 'type-btn ' + (type === 'auto' ? 'selected-auto' : '');
       document.getElementById('btnTypeCamioneta').className = 'type-btn ' + (type === 'camioneta' ? 'selected-camioneta' : '');
       document.getElementById('btnTypeMoto').className = 'type-btn ' + (type === 'moto' ? 'selected-moto' : '');
+
+      const input = document.getElementById('plateInput');
+      input.placeholder = (type === 'moto') ? 'Placa (ej. AB-123D)' : 'Placa (ej. ABC-1234)';
+      input.value = '';
+      input.focus();
     }
 
     function switchTab(tab) {
@@ -207,6 +280,7 @@
     function saveState() {
       localStorage.setItem('parking_db', JSON.stringify(vehicles));
       localStorage.setItem('parking_history', JSON.stringify(historyRecords));
+      localStorage.setItem('parking_voids', JSON.stringify(voidRecords));
       renderActive();
       renderReport();
     }
@@ -215,6 +289,15 @@
       const input = document.getElementById('plateInput');
       const plate = input.value.trim().toUpperCase();
       if (!plate) return;
+
+      if (!isValidPlate(plate, selectedVehicleType)) {
+        const msg = (selectedVehicleType === 'moto')
+          ? 'Formato de moto inválido (ej. AB-123D o ABC-1234).'
+          : 'Formato inválido. Debe tener 3 letras y 3 o 4 números (ej. ABC-1234).';
+        alert(msg);
+        input.focus();
+        return;
+      }
 
       if (vehicles.some(v => v.plate === plate)) {
         alert('Este vehículo ya se encuentra registrado en el patio.');
@@ -241,19 +324,16 @@
       let totalCost = 0;
       let ruleApplied = '';
 
-      // Regla 1: Tiempo de gracia
       if (totalMinutes <= GRACE_PERIOD_MIN) {
         totalCost = 0;
         ruleApplied = `Tiempo de gracia (menos de ${GRACE_PERIOD_MIN} min)`;
       } else {
-        // Regla 2: Facturación con tope de $5 por bloque de 24h
         const days = Math.floor(totalMinutes / (24 * 60));
         const remMinutes = totalMinutes % (24 * 60);
 
         let remHours = Math.ceil(remMinutes / 60);
         let remCost = remHours * HOURLY_RATE;
 
-        // Si las horas restantes superan el tope del día, se topa en $5
         if (remCost > DAILY_MAX_RATE) {
           remCost = DAILY_MAX_RATE;
         }
@@ -301,6 +381,7 @@
       const bill = calculateBilling(v);
 
       historyRecords.unshift({
+        id: Date.now() + Math.random().toString(36).substring(2, 7),
         plate: v.plate,
         type: bill.type,
         entryTime: v.entryTime,
@@ -313,6 +394,73 @@
       vehicles.splice(currentCheckoutIndex, 1);
       closeModal();
       saveState();
+    }
+
+    function voidActiveVehicle(index) {
+      const v = vehicles[index];
+      const enteredPass = prompt(`Para anular el ingreso en patio de la placa "${v.plate}", escribe la clave:`);
+      if (enteredPass === null) return;
+
+      if (enteredPass !== getAdminPassword()) {
+        alert('Clave incorrecta. Acción cancelada.');
+        return;
+      }
+
+      const reason = prompt('Indica el motivo de la anulación (ej. error de tipeo, cliente no ingresó):');
+      if (!reason || reason.trim() === '') {
+        alert('Debes ingresar un motivo para registrar la anulación.');
+        return;
+      }
+
+      voidRecords.unshift({
+        id: Date.now() + Math.random().toString(36).substring(2, 7),
+        plate: v.plate,
+        type: v.type,
+        entryTime: v.entryTime,
+        voidTime: new Date().toISOString(),
+        origin: 'Patio (No cobrado)',
+        amountVoided: 0,
+        reason: reason.trim()
+      });
+
+      vehicles.splice(index, 1);
+      saveState();
+      alert(`Vehículo con placa ${v.plate} anulado correctamente del patio.`);
+    }
+
+    function voidHistoryRecord(recordId, plate) {
+      const enteredPass = prompt(`Para anular la salida cobrada de la placa "${plate}", escribe la clave:`);
+      if (enteredPass === null) return;
+
+      if (enteredPass !== getAdminPassword()) {
+        alert('Clave incorrecta. Acción cancelada.');
+        return;
+      }
+
+      const reason = prompt('Indica el motivo de la anulación (ej. cobro duplicado, devolución):');
+      if (!reason || reason.trim() === '') {
+        alert('Debes ingresar un motivo para registrar la anulación.');
+        return;
+      }
+
+      const idx = historyRecords.findIndex(r => r.id === recordId);
+      if (idx !== -1) {
+        const r = historyRecords[idx];
+        voidRecords.unshift({
+          id: Date.now() + Math.random().toString(36).substring(2, 7),
+          plate: r.plate,
+          type: r.type,
+          entryTime: r.entryTime,
+          voidTime: new Date().toISOString(),
+          origin: 'Caja (Cobro anulado)',
+          amountVoided: r.totalCost,
+          reason: reason.trim()
+        });
+
+        historyRecords.splice(idx, 1);
+        saveState();
+        alert(`Cobro de placa ${plate} anulado y registrado en auditoría.`);
+      }
     }
 
     function renderActive() {
@@ -341,7 +489,10 @@
             </div>
             <div class="meta-time">Entrada: ${timeStr}</div>
           </div>
-          <button class="btn-checkout" onclick="startCheckout(${idx})">Cobrar</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn-checkout" onclick="startCheckout(${idx})">Cobrar</button>
+            <button class="btn-delete" onclick="voidActiveVehicle(${idx})">Anular</button>
+          </div>
         `;
         container.appendChild(div);
       });
@@ -350,11 +501,12 @@
     function renderReport() {
       const selectedDate = document.getElementById('reportDate').value;
       const container = document.getElementById('historyList');
+      const voidContainer = document.getElementById('voidList');
       container.innerHTML = '';
+      voidContainer.innerHTML = '';
 
       const dailyRecords = historyRecords.filter(r => {
-        const exitDate = new Date(r.exitTime).toLocaleDateString('en-CA');
-        return exitDate === selectedDate;
+        return new Date(r.exitTime).toLocaleDateString('en-CA') === selectedDate;
       });
 
       let totalIncome = 0;
@@ -385,30 +537,57 @@
       document.getElementById('sumMotoCount').innerText = `${motoCount} ($${motoIncome})`;
 
       if (dailyRecords.length === 0) {
-        container.innerHTML = '<div style="text-align:center; color:#999; padding:24px;">No hay cobros registrados en esta fecha</div>';
-        return;
+        container.innerHTML = '<div style="text-align:center; color:#999; padding:18px;">No hay cobros registrados en esta fecha</div>';
+      } else {
+        dailyRecords.forEach(r => {
+          const inTime = new Date(r.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const outTime = new Date(r.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const type = r.type || 'auto';
+          const badgeClass = `badge-${type}`;
+
+          const div = document.createElement('div');
+          div.className = 'history-item';
+          div.innerHTML = `
+            <div>
+              <div>
+                <span class="plate">${r.plate}</span>
+                <span class="badge ${badgeClass}">${type}</span>
+              </div>
+              <div class="meta-time">In: ${inTime} | Out: ${outTime} — ${r.ruleApplied}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:700; font-size:1.1rem; color:var(--success); margin-bottom:4px;">$${r.totalCost}</div>
+              <button class="btn-delete" style="padding:4px 8px;" onclick="voidHistoryRecord('${r.id}', '${r.plate}')">Anular</button>
+            </div>
+          `;
+          container.appendChild(div);
+        });
       }
 
-      dailyRecords.forEach(r => {
-        const inTime = new Date(r.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const outTime = new Date(r.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const type = r.type || 'auto';
-        const badgeClass = `badge-${type}`;
-
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.innerHTML = `
-          <div>
-            <div>
-              <span class="plate">${r.plate}</span>
-              <span class="badge ${badgeClass}">${type}</span>
-            </div>
-            <div class="meta-time">In: ${inTime} | Out: ${outTime} — ${r.ruleApplied}</div>
-          </div>
-          <div style="font-weight:700; font-size:1.1rem; color:var(--success);">$${r.totalCost}</div>
-        `;
-        container.appendChild(div);
+      const dailyVoids = voidRecords.filter(r => {
+        return new Date(r.voidTime).toLocaleDateString('en-CA') === selectedDate;
       });
+
+      document.getElementById('voidCount').innerText = dailyVoids.length;
+
+      if (dailyVoids.length === 0) {
+        voidContainer.innerHTML = '<div style="text-align:center; color:#999; padding:12px; font-size:0.85rem;">No hay anulaciones registradas hoy</div>';
+      } else {
+        dailyVoids.forEach(r => {
+          const voidTime = new Date(r.voidTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const div = document.createElement('div');
+          div.className = 'void-item';
+          div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; font-weight:700;">
+              <span>${r.plate} (${(r.type || 'auto').toUpperCase()})</span>
+              <span style="color:var(--danger);">${r.origin} ${r.amountVoided > 0 ? `(-$${r.amountVoided})` : ''}</span>
+            </div>
+            <div style="color:var(--text-sec); font-size:0.8rem; margin-top:2px;">Hora anulación: ${voidTime}</div>
+            <div style="margin-top:4px; font-style:italic;"><strong>Motivo:</strong> ${r.reason}</div>
+          `;
+          voidContainer.appendChild(div);
+        });
+      }
     }
 
     function exportReportCSV() {
@@ -416,18 +595,30 @@
       const dailyRecords = historyRecords.filter(r => {
         return new Date(r.exitTime).toLocaleDateString('en-CA') === selectedDate;
       });
+      const dailyVoids = voidRecords.filter(r => {
+        return new Date(r.voidTime).toLocaleDateString('en-CA') === selectedDate;
+      });
 
-      if (dailyRecords.length === 0) {
-        alert('No hay registros para exportar en esta fecha.');
+      if (dailyRecords.length === 0 && dailyVoids.length === 0) {
+        alert('No hay registros ni anulaciones para exportar en esta fecha.');
         return;
       }
 
-      let csv = 'Placa,Tipo,Hora Entrada,Hora Salida,Detalle Cobro,Total Cobrado ($)\n';
+      let csv = '=== VENTAS EFECTIVAS ===\n';
+      csv += 'Placa,Tipo,Hora Entrada,Hora Salida,Detalle Cobro,Total Cobrado ($)\n';
       dailyRecords.forEach(r => {
         const inTime = new Date(r.entryTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const outTime = new Date(r.exitTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const type = (r.type || 'auto').toUpperCase();
         csv += `"${r.plate}","${type}","${inTime}","${outTime}","${r.ruleApplied}",${r.totalCost}\n`;
+      });
+
+      csv += '\n=== AUDITORIA DE ANULACIONES ===\n';
+      csv += 'Placa,Tipo,Origen,Hora Anulacion,Monto Anulado ($),Motivo\n';
+      dailyVoids.forEach(v => {
+        const vTime = new Date(v.voidTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const type = (v.type || 'auto').toUpperCase();
+        csv += `"${v.plate}","${type}","${v.origin}","${v.voidTime ? vTime : ''}",${v.amountVoided},"${v.reason}"\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
